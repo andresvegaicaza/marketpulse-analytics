@@ -13,6 +13,9 @@ from db import (
     deactivate_ticker,
     reactivate_ticker,
     update_ticker,
+    get_active_symbols,
+    get_ticker_history,
+    get_performance_summary,
 )
 
 st.set_page_config(
@@ -34,7 +37,7 @@ def get_conn():
 
 conn = get_conn()
 
-tab_watchlist, tab_add, tab_manage = st.tabs(["Watchlist", "Add Ticker", "Manage Ticker"])
+tab_watchlist, tab_add, tab_manage, tab_analytics = st.tabs(["Watchlist", "Add Ticker", "Manage Ticker", "Analytics"])
 
 # ── Tab 1: Watchlist ──────────────────────────────────────────────────────────
 with tab_watchlist:
@@ -140,3 +143,126 @@ with tab_manage:
             if st.button(f"Reactivate {selected_symbol}", type="primary"):
                 msg = reactivate_ticker(conn, selected_symbol)
                 st.success(msg)
+
+# ── Tab 4: Analytics ──────────────────────────────────────────────────────────
+with tab_analytics:
+    st.subheader("Ticker Analytics")
+
+    active_symbols = get_active_symbols(conn)
+    if not active_symbols:
+        st.info("No active tickers in your watchlist.")
+    else:
+        col_sym, col_period, col_bench = st.columns([2, 2, 2])
+        with col_sym:
+            ticker = st.selectbox("Ticker", active_symbols, key="analytics_ticker")
+        with col_period:
+            period = st.selectbox("Period", ["30D", "90D", "YTD", "1Y", "ALL_AVAILABLE"], index=1)
+        with col_bench:
+            benchmark = st.selectbox(
+                "Benchmark",
+                [s for s in active_symbols if s != ticker] if len(active_symbols) > 1 else ["SPY"],
+                index=0
+            )
+
+        df = get_ticker_history(conn, ticker, period)
+
+        if df.empty:
+            st.warning(f"No data available for {ticker} in this period.")
+        else:
+            latest      = df.iloc[-1]
+            first_close = df.iloc[0]["close_price"]
+            last_close  = latest["close_price"]
+
+            # ── Key metrics ──
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("Current Price", f"${last_close:,.2f}",
+                      f"{latest['daily_return_pct'] * 100:+.2f}% today" if latest["daily_return_pct"] else "—")
+            period_ret = (last_close - first_close) / first_close * 100
+            m2.metric("Period Return", f"{period_ret:+.2f}%")
+            ann_vol = latest["annualized_volatility_20d"]
+            m3.metric("Annualized Volatility", f"{ann_vol * 100:.1f}%" if ann_vol else "—")
+            m4.metric("Avg Daily Volume", f"{df['volume'].mean():,.0f}")
+
+            st.divider()
+
+            # ── Signal flags ──
+            flags = []
+            if latest["close_price"] and latest["moving_average_20d"]:
+                if latest["close_price"] > latest["moving_average_20d"]:
+                    flags.append("🟢 Price is **above** the 20-day MA — bullish signal")
+                else:
+                    flags.append("🔴 Price is **below** the 20-day MA — bearish signal")
+            if ann_vol and ann_vol > 0.30:
+                flags.append(f"⚠️ High volatility — annualized vol at **{ann_vol * 100:.1f}%**")
+            if latest["daily_return_pct"] and abs(latest["daily_return_pct"]) > 0.03:
+                flags.append(f"⚡ Unusual move today: **{latest['daily_return_pct'] * 100:+.2f}%**")
+
+            if flags:
+                st.markdown("**Signals**")
+                for f in flags:
+                    st.markdown(f"- {f}")
+                st.divider()
+
+            # ── Price chart with moving averages ──
+            st.markdown("**Price History & Moving Averages**")
+            chart_df = df.set_index("trading_date")[
+                ["close_price", "moving_average_7d", "moving_average_20d", "moving_average_50d"]
+            ].rename(columns={
+                "close_price":        "Close",
+                "moving_average_7d":  "MA 7d",
+                "moving_average_20d": "MA 20d",
+                "moving_average_50d": "MA 50d",
+            })
+            st.line_chart(chart_df, height=320)
+
+            # ── Benchmark comparison ──
+            st.markdown(f"**Cumulative Return: {ticker} vs {benchmark}**")
+            df_bench = get_ticker_history(conn, benchmark, period)
+            if not df_bench.empty:
+                t_base  = df["close_price"].iloc[0]
+                b_base  = df_bench["close_price"].iloc[0]
+                t_cum   = ((df.set_index("trading_date")["close_price"] / t_base) - 1) * 100
+                b_cum   = ((df_bench.set_index("trading_date")["close_price"] / b_base) - 1) * 100
+                cmp_df  = pd.concat([t_cum.rename(ticker), b_cum.rename(benchmark)], axis=1).dropna()
+                st.line_chart(cmp_df, height=280)
+
+            # ── $10k scenario ──
+            st.markdown("**Scenario: $10,000 invested at period start**")
+            shares      = 10_000 / first_close
+            end_value   = shares * last_close
+            gain_loss   = end_value - 10_000
+            s1, s2, s3  = st.columns(3)
+            s1.metric("Starting Value",  "$10,000.00")
+            s2.metric("Current Value",   f"${end_value:,.2f}", f"{gain_loss:+,.2f}")
+            s3.metric("Shares Acquired", f"{shares:.4f} shares @ ${first_close:.2f}")
+
+            st.divider()
+
+            # ── Period performance summary table ──
+            st.markdown("**Performance Summary by Period**")
+            summary = get_performance_summary(conn, ticker)
+            if not summary.empty:
+                summary["period_return_pct"]    = (summary["period_return_pct"]    * 100).map("{:+.2f}%".format)
+                summary["avg_daily_return_pct"] = (summary["avg_daily_return_pct"] * 100).map("{:+.4f}%".format)
+                summary["volatility_pct"]       = (summary["volatility_pct"]       * 100).map("{:.2f}%".format)
+                summary["start_close_price"]    = summary["start_close_price"].map("${:,.2f}".format)
+                summary["end_close_price"]      = summary["end_close_price"].map("${:,.2f}".format)
+                summary["avg_volume"]           = summary["avg_volume"].map("{:,.0f}".format)
+                st.dataframe(
+                    summary.rename(columns={
+                        "period_name":         "Period",
+                        "period_start_date":   "Start",
+                        "period_end_date":     "End",
+                        "start_close_price":   "Start Price",
+                        "end_close_price":     "End Price",
+                        "period_return_pct":   "Total Return",
+                        "avg_daily_return_pct":"Avg Daily Return",
+                        "volatility_pct":      "Volatility",
+                        "min_close_price":     "Min Price",
+                        "max_close_price":     "Max Price",
+                        "avg_volume":          "Avg Volume",
+                        "trading_days_count":  "Trading Days",
+                    }),
+                    use_container_width=True,
+                    hide_index=True,
+                )

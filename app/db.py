@@ -149,3 +149,80 @@ def update_ticker(conn, symbol: str, company_name: str, category: str, notes: st
     )
     conn.commit()
     return f"Updated {symbol}."
+
+
+def get_active_symbols(conn) -> list[str]:
+    """Return list of active ticker symbols."""
+    cursor = conn.cursor()
+    cursor.execute("select symbol from APP.WATCHLIST where is_active = true order by symbol")
+    return [row[0] for row in cursor.fetchall()]
+
+
+def get_ticker_history(conn, symbol: str, period: str = "ALL_AVAILABLE") -> pd.DataFrame:
+    """Return price history with moving averages for a ticker from the mart."""
+    period_filter = {
+        "30D":           "dateadd(day, -29, max_date.d)",
+        "90D":           "dateadd(day, -89, max_date.d)",
+        "YTD":           "date_trunc('year', max_date.d)",
+        "1Y":            "dateadd(year, -1, max_date.d)",
+        "ALL_AVAILABLE": "to_date('1900-01-01')",
+    }
+    start_expr = period_filter.get(period, "to_date('1900-01-01')")
+
+    sql = f"""
+        with max_date as (select max(trading_date) as d from MARKETPULSE_DEV.MARTS.mart_watchlist_performance)
+        select
+            trading_date,
+            close_price,
+            moving_average_7d,
+            moving_average_20d,
+            moving_average_50d,
+            daily_return_pct,
+            volume,
+            volatility_20d,
+            annualized_volatility_20d
+        from MARKETPULSE_DEV.MARTS.mart_watchlist_performance
+        where ticker_symbol = %s
+          and trading_date >= {start_expr}
+        order by trading_date asc
+    """
+    cursor = conn.cursor()
+    cursor.execute(sql, (symbol,))
+    rows = cursor.fetchall()
+    cols = [c[0].lower() for c in cursor.description]
+    return pd.DataFrame(rows, columns=cols)
+
+
+def get_performance_summary(conn, symbol: str) -> pd.DataFrame:
+    """Return period performance summary for a ticker."""
+    sql = """
+        select
+            period_name,
+            period_start_date,
+            period_end_date,
+            start_close_price,
+            end_close_price,
+            period_return_pct,
+            avg_daily_return_pct,
+            volatility_pct,
+            min_close_price,
+            max_close_price,
+            avg_volume,
+            trading_days_count
+        from MARKETPULSE_DEV.MARTS.mart_ticker_performance_summary
+        where ticker_symbol = %s
+        order by
+            case period_name
+                when 'MTD'           then 1
+                when '30D'           then 2
+                when '90D'           then 3
+                when 'YTD'           then 4
+                when '1Y'            then 5
+                when 'ALL_AVAILABLE' then 6
+            end
+    """
+    cursor = conn.cursor()
+    cursor.execute(sql, (symbol,))
+    rows = cursor.fetchall()
+    cols = [c[0].lower() for c in cursor.description]
+    return pd.DataFrame(rows, columns=cols)
