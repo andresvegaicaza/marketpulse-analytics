@@ -25,7 +25,7 @@ st.set_page_config(
 )
 
 st.title("📈 MarketPulse — Watchlist Manager")
-st.caption("Manage your stock watchlist. Analytics live in Power BI.")
+st.caption("Manage your stock watchlist and explore ticker analytics.")
 
 CATEGORIES = ["", "Tech", "Finance", "ETF", "Energy", "Healthcare", "Consumer", "Space", "Other"]
 

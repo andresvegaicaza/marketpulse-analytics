@@ -161,16 +161,15 @@ def get_active_symbols(conn) -> list[str]:
 def get_ticker_history(conn, symbol: str, period: str = "ALL_AVAILABLE") -> pd.DataFrame:
     """Return price history with moving averages for a ticker from the mart."""
     period_filter = {
-        "30D":           "dateadd(day, -29, max_date.d)",
-        "90D":           "dateadd(day, -89, max_date.d)",
-        "YTD":           "date_trunc('year', max_date.d)",
-        "1Y":            "dateadd(year, -1, max_date.d)",
+        "30D":           "dateadd(day, -29, (select max(trading_date) from MARKETPULSE_DEV.MARTS.mart_watchlist_performance))",
+        "90D":           "dateadd(day, -89, (select max(trading_date) from MARKETPULSE_DEV.MARTS.mart_watchlist_performance))",
+        "YTD":           "date_trunc('year', (select max(trading_date) from MARKETPULSE_DEV.MARTS.mart_watchlist_performance))",
+        "1Y":            "dateadd(year, -1, (select max(trading_date) from MARKETPULSE_DEV.MARTS.mart_watchlist_performance))",
         "ALL_AVAILABLE": "to_date('1900-01-01')",
     }
     start_expr = period_filter.get(period, "to_date('1900-01-01')")
 
     sql = f"""
-        with max_date as (select max(trading_date) as d from MARKETPULSE_DEV.MARTS.mart_watchlist_performance)
         select
             trading_date,
             close_price,
