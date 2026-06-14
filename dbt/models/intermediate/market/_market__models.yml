@@ -1,0 +1,74 @@
+version: 2
+
+models:
+  - name: int_stock_daily_returns
+    description: >
+      Daily price changes and percentage returns per ticker.
+      Uses LAG() to compare each day's close to the previous trading day.
+      The first row per ticker will have null previous_close_price and daily_return_pct
+      since there is no prior day to compare against.
+    columns:
+      - name: ticker_symbol
+        description: Ticker symbol.
+        tests:
+          - not_null
+      - name: trading_date
+        description: The trading date.
+        tests:
+          - not_null
+      - name: close_price
+        description: Closing price for the day.
+        tests:
+          - not_null
+      - name: previous_close_price
+        description: Previous trading day's closing price. Null for the earliest date per ticker.
+      - name: price_change
+        description: Absolute change in closing price vs previous day.
+      - name: daily_return_pct
+        description: Percentage return vs previous day (e.g. 0.02 = 2%). Null for earliest date.
+
+  - name: int_stock_moving_averages
+    description: >
+      Rolling moving averages of closing price per ticker.
+      Windows use all available history — early rows will have averages
+      based on fewer than the full window of days.
+    columns:
+      - name: ticker_symbol
+        description: Ticker symbol.
+        tests:
+          - not_null
+      - name: trading_date
+        description: The trading date.
+        tests:
+          - not_null
+      - name: close_price
+        description: Closing price for the day.
+        tests:
+          - not_null
+      - name: moving_average_7d
+        description: 7-day simple moving average of close price.
+      - name: moving_average_20d
+        description: 20-day simple moving average of close price.
+      - name: moving_average_50d
+        description: 50-day simple moving average of close price.
+
+  - name: int_stock_volatility
+    description: >
+      20-day rolling volatility of daily returns per ticker.
+      Annualized volatility uses sqrt(252) to convert from daily to annual.
+      Null for the first row per ticker where daily_return_pct is unavailable.
+    columns:
+      - name: ticker_symbol
+        description: Ticker symbol.
+        tests:
+          - not_null
+      - name: trading_date
+        description: The trading date.
+        tests:
+          - not_null
+      - name: daily_return_pct
+        description: Percentage return for the day. Null for earliest date per ticker.
+      - name: volatility_20d
+        description: 20-day rolling standard deviation of daily returns.
+      - name: annualized_volatility_20d
+        description: volatility_20d multiplied by sqrt(252) to annualize.

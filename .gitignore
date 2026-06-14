@@ -1,0 +1,19 @@
+# Secrets
+.env
+rsa_key.p8
+rsa_key.pub
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# dbt
+dbt/target/
+dbt/logs/
+dbt/.user.yml
+
+# OS
+.DS_Store
+Thumbs.db

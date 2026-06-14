@@ -1,0 +1,42 @@
+holiday_date,market_code,holiday_name,is_full_day_closure,is_early_close
+2024-01-01,NYSE,New Year's Day,true,false
+2024-01-15,NYSE,Martin Luther King Jr. Day,true,false
+2024-02-19,NYSE,Presidents' Day,true,false
+2024-03-29,NYSE,Good Friday,true,false
+2024-05-27,NYSE,Memorial Day,true,false
+2024-06-19,NYSE,Juneteenth National Independence Day,true,false
+2024-07-04,NYSE,Independence Day,true,false
+2024-09-02,NYSE,Labor Day,true,false
+2024-11-28,NYSE,Thanksgiving Day,true,false
+2024-12-25,NYSE,Christmas Day,true,false
+2025-01-01,NYSE,New Year's Day,true,false
+2025-01-09,NYSE,National Day of Mourning (Jimmy Carter),true,false
+2025-01-20,NYSE,Martin Luther King Jr. Day,true,false
+2025-02-17,NYSE,Presidents' Day,true,false
+2025-04-18,NYSE,Good Friday,true,false
+2025-05-26,NYSE,Memorial Day,true,false
+2025-06-19,NYSE,Juneteenth National Independence Day,true,false
+2025-07-04,NYSE,Independence Day,true,false
+2025-09-01,NYSE,Labor Day,true,false
+2025-11-27,NYSE,Thanksgiving Day,true,false
+2025-12-25,NYSE,Christmas Day,true,false
+2026-01-01,NYSE,New Year's Day,true,false
+2026-01-19,NYSE,Martin Luther King Jr. Day,true,false
+2026-02-16,NYSE,Presidents' Day,true,false
+2026-04-03,NYSE,Good Friday,true,false
+2026-05-25,NYSE,Memorial Day,true,false
+2026-06-19,NYSE,Juneteenth National Independence Day,true,false
+2026-07-03,NYSE,Independence Day (observed),true,false
+2026-09-07,NYSE,Labor Day,true,false
+2026-11-26,NYSE,Thanksgiving Day,true,false
+2026-12-25,NYSE,Christmas Day,true,false
+2027-01-01,NYSE,New Year's Day,true,false
+2027-01-18,NYSE,Martin Luther King Jr. Day,true,false
+2027-02-15,NYSE,Presidents' Day,true,false
+2027-03-26,NYSE,Good Friday,true,false
+2027-05-31,NYSE,Memorial Day,true,false
+2027-06-18,NYSE,Juneteenth National Independence Day (observed),true,false
+2027-07-05,NYSE,Independence Day (observed),true,false
+2027-09-06,NYSE,Labor Day,true,false
+2027-11-25,NYSE,Thanksgiving Day,true,false
+2027-12-24,NYSE,Christmas Day (observed),true,false

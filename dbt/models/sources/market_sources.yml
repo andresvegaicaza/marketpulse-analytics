@@ -1,0 +1,55 @@
+version: 2
+
+sources:
+  - name: market_raw
+    description: Raw stock market data landed by the Python ingestion script.
+    database: MARKETPULSE_DEV
+    schema: RAW
+    tables:
+      - name: raw_stock_prices
+        description: >
+          Append-only table of daily OHLCV prices fetched from Alpha Vantage.
+          One row per API call per symbol per date. Duplicates are possible
+          and are resolved in the staging layer.
+        columns:
+          - name: symbol
+            description: Ticker symbol (e.g. AAPL).
+          - name: trade_date
+            description: The trading date for this price row.
+          - name: open
+            description: Opening price.
+          - name: high
+            description: Intraday high price.
+          - name: low
+            description: Intraday low price.
+          - name: close
+            description: Closing price.
+          - name: volume
+            description: Number of shares traded.
+          - name: source
+            description: Data source identifier (alpha_vantage).
+          - name: loaded_at
+            description: Timestamp when the row was inserted by the ingestion script.
+
+  - name: market_app
+    description: Application tables managed by the Streamlit watchlist app.
+    database: MARKETPULSE_DEV
+    schema: APP
+    tables:
+      - name: watchlist
+        description: Active ticker watchlist. Soft-deletes via is_active = false.
+        columns:
+          - name: watchlist_id
+            description: Surrogate primary key.
+          - name: symbol
+            description: Ticker symbol. Unique per active row.
+          - name: company_name
+            description: Human-readable company name.
+          - name: category
+            description: User-defined category tag (e.g. Tech, ETF).
+          - name: is_active
+            description: False means soft-deleted.
+          - name: created_at
+            description: When the ticker was first added.
+          - name: updated_at
+            description: When the row was last modified.

@@ -1,0 +1,112 @@
+version: 2
+
+models:
+  - name: mart_watchlist_performance
+    description: >
+      User-facing daily performance view for all active watchlist tickers.
+      Denormalized for Power BI usability — joins price facts, performance metrics,
+      and ticker/date dimensions into a single analytics-ready table.
+      Filtered to is_active = true tickers only.
+    columns:
+      - name: ticker_symbol
+        description: Stock ticker symbol.
+        tests:
+          - not_null
+      - name: company_name
+        description: Human-readable company name from dim_ticker.
+      - name: category
+        description: User-defined watchlist category (e.g. Tech, ETF).
+      - name: currency
+        description: Trading currency (defaults to USD in MVP).
+      - name: country
+        description: Country of listing (defaults to US in MVP).
+      - name: is_active
+        description: Always true in this mart — inactive tickers are excluded.
+        tests:
+          - not_null
+      - name: trading_date
+        description: The calendar trading date.
+        tests:
+          - not_null
+      - name: calendar_year
+        description: Calendar year of the trading date.
+      - name: calendar_quarter
+        description: Calendar quarter (1–4).
+      - name: calendar_month
+        description: Calendar month number (1–12).
+      - name: calendar_month_name
+        description: Full month name (e.g. January).
+      - name: close_price
+        description: Closing price for the trading day.
+        tests:
+          - not_null
+      - name: previous_close_price
+        description: Previous trading day's closing price. Null for the earliest date per ticker.
+      - name: daily_return_pct
+        description: Percentage return vs previous trading day. Null for earliest date.
+      - name: moving_average_7d
+        description: 7-day simple moving average of close price.
+      - name: moving_average_20d
+        description: 20-day simple moving average of close price.
+      - name: moving_average_50d
+        description: 50-day simple moving average of close price.
+      - name: volatility_20d
+        description: 20-day rolling standard deviation of daily returns.
+      - name: annualized_volatility_20d
+        description: volatility_20d annualized by multiplying by sqrt(252).
+      - name: volume
+        description: Number of shares traded.
+        tests:
+          - not_null
+
+  - name: mart_ticker_performance_summary
+    description: >
+      Summary performance statistics per ticker per time period.
+      One row per ticker per period (ALL_AVAILABLE, YTD, MTD, 30D, 90D, 1Y).
+      Used by Power BI for ranking, comparison, and period-over-period analysis.
+    columns:
+      - name: ticker_symbol
+        description: Stock ticker symbol.
+        tests:
+          - not_null
+      - name: company_name
+        description: Human-readable company name.
+      - name: category
+        description: User-defined watchlist category.
+      - name: period_name
+        description: Summary period label (ALL_AVAILABLE, YTD, MTD, 30D, 90D, 1Y).
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["ALL_AVAILABLE", "YTD", "MTD", "30D", "90D", "1Y"]
+      - name: period_start_date
+        description: First date of the summary period.
+        tests:
+          - not_null
+      - name: period_end_date
+        description: Last date of the summary period (latest available trading date).
+        tests:
+          - not_null
+      - name: start_close_price
+        description: Closing price on the first trading day of the period.
+      - name: end_close_price
+        description: Closing price on the last trading day of the period.
+      - name: period_return_pct
+        description: Total return from period start to end. Null if start price is zero.
+      - name: avg_daily_return_pct
+        description: Average daily return percentage across all trading days in the period.
+      - name: volatility_pct
+        description: Average 20-day rolling volatility across the period.
+      - name: min_close_price
+        description: Lowest closing price within the period.
+      - name: max_close_price
+        description: Highest closing price within the period.
+      - name: total_volume
+        description: Total shares traded across all trading days in the period.
+      - name: avg_volume
+        description: Average daily volume across all trading days in the period.
+      - name: trading_days_count
+        description: Number of trading days within the period.
+        tests:
+          - not_null

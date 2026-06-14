@@ -1,0 +1,240 @@
+version: 2
+
+models:
+  - name: dim_ticker
+    description: >
+      Dimension table with one row per ticker symbol.
+      Describes each ticker's attributes — company name, category, and active status.
+      Fields like sector, industry, exchange_code, and asset_type are null in the MVP
+      and will be populated when the Streamlit app (M1) adds them to the watchlist.
+    columns:
+      - name: ticker_key
+        description: Surrogate primary key sourced from APP.WATCHLIST.
+        tests:
+          - not_null
+          - unique
+      - name: ticker_symbol
+        description: Stock ticker symbol (e.g. AAPL). Unique per row.
+        tests:
+          - not_null
+          - unique
+      - name: company_name
+        description: Human-readable company name.
+      - name: asset_type
+        description: Asset type (e.g. stock, ETF). Null in MVP — populated in M1.
+      - name: exchange_code
+        description: Exchange where the ticker is listed (e.g. NYSE, NASDAQ). Null in MVP.
+      - name: sector
+        description: Business sector (e.g. Technology, Finance). Null in MVP.
+      - name: industry
+        description: Industry within the sector. Null in MVP.
+      - name: currency
+        description: Trading currency. Defaults to USD.
+      - name: country
+        description: Country of listing. Defaults to US.
+      - name: category
+        description: User-defined watchlist category tag (e.g. Tech, ETF, Finance).
+      - name: notes
+        description: Free-text notes about the ticker.
+      - name: is_active
+        description: False means the ticker has been soft-deleted from the watchlist.
+        tests:
+          - not_null
+      - name: first_added_at
+        description: When the ticker was first added to the watchlist.
+      - name: last_updated_at
+        description: When the ticker record was last modified.
+
+  - name: dim_date
+    description: >
+      Full calendar dimension from 2024-01-01 to 2027-12-31.
+      One row per calendar date. Includes trading day flags derived from NYSE market
+      holidays (loaded via the market_holidays seed). Used by Power BI for all
+      date-based filtering and time intelligence.
+    columns:
+      - name: date_key
+        description: Integer surrogate key in YYYYMMDD format (e.g. 20240101).
+        tests:
+          - not_null
+          - unique
+      - name: date_day
+        description: The calendar date.
+        tests:
+          - not_null
+          - unique
+      - name: calendar_year
+        description: Calendar year (e.g. 2024).
+        tests:
+          - not_null
+      - name: calendar_quarter
+        description: Quarter of the year (1–4).
+        tests:
+          - not_null
+      - name: calendar_month
+        description: Month number (1–12).
+        tests:
+          - not_null
+      - name: calendar_month_name
+        description: Full month name (e.g. January, February).
+      - name: calendar_month_short_name
+        description: Abbreviated month name (e.g. Jan, Feb).
+      - name: calendar_week
+        description: ISO week number within the year.
+      - name: day_of_month
+        description: Day number within the month (1–31).
+      - name: day_of_week
+        description: ISO day of week (1=Monday, 7=Sunday).
+      - name: day_of_week_name
+        description: Full day name (e.g. Monday, Tuesday).
+      - name: day_of_week_short_name
+        description: Abbreviated day name (e.g. Mon, Tue).
+      - name: day_of_year
+        description: Day number within the year (1–366).
+      - name: week_start_date
+        description: First day (Monday) of the ISO calendar week.
+      - name: week_end_date
+        description: Last day (Sunday) of the ISO calendar week.
+      - name: month_start_date
+        description: First day of the calendar month.
+      - name: month_end_date
+        description: Last day of the calendar month.
+      - name: quarter_start_date
+        description: First day of the calendar quarter.
+      - name: quarter_end_date
+        description: Last day of the calendar quarter.
+      - name: year_start_date
+        description: First day of the calendar year.
+      - name: year_end_date
+        description: Last day of the calendar year.
+      - name: is_weekend
+        description: True if Saturday or Sunday.
+        tests:
+          - not_null
+      - name: is_weekday
+        description: True if Monday through Friday.
+        tests:
+          - not_null
+      - name: is_market_holiday
+        description: True if the NYSE was closed for a full-day holiday on this date.
+        tests:
+          - not_null
+      - name: market_holiday_name
+        description: Name of the market holiday if applicable, otherwise null.
+      - name: is_trading_day
+        description: True if the market was open (weekday and not a market holiday).
+        tests:
+          - not_null
+      - name: previous_trading_date
+        description: The most recent prior trading day. Null for the first date in the spine.
+      - name: next_trading_date
+        description: The next upcoming trading day. Null for the last date in the spine.
+      - name: trading_day_of_month
+        description: Running count of trading days within the calendar month.
+      - name: trading_day_of_year
+        description: Running count of trading days within the calendar year.
+
+  - name: fact_stock_price_daily
+    description: >
+      Core daily OHLCV fact table. One row per ticker per trading date.
+      This is the single source of truth for raw price data.
+      Power BI connects here for price and volume charts.
+    columns:
+      - name: ticker_symbol
+        description: Stock ticker symbol. Foreign key to dim_ticker.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_ticker')
+                field: ticker_symbol
+      - name: ticker_key
+        description: Surrogate key to dim_ticker.
+        tests:
+          - not_null
+      - name: date_key
+        description: Integer date key in YYYYMMDD format. Foreign key to dim_date.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_key
+      - name: trading_date
+        description: The trading date for this price record.
+        tests:
+          - not_null
+      - name: open_price
+        description: Opening price of the trading day.
+        tests:
+          - not_null
+      - name: high_price
+        description: Intraday high price.
+        tests:
+          - not_null
+      - name: low_price
+        description: Intraday low price.
+        tests:
+          - not_null
+      - name: close_price
+        description: Closing price of the trading day.
+        tests:
+          - not_null
+      - name: volume
+        description: Number of shares traded.
+        tests:
+          - not_null
+      - name: data_source
+        description: Origin of the price data (alpha_vantage).
+      - name: loaded_at
+        description: Timestamp when the raw row was inserted by the ingestion script.
+
+  - name: fact_stock_performance_daily
+    description: >
+      Derived performance metrics per ticker per trading date.
+      Joins daily returns, moving averages, and volatility from intermediate models.
+      Power BI uses this for return analysis, volatility charts, and MA overlays.
+    columns:
+      - name: ticker_symbol
+        description: Stock ticker symbol. Foreign key to dim_ticker.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_ticker')
+                field: ticker_symbol
+      - name: ticker_key
+        description: Surrogate key to dim_ticker.
+        tests:
+          - not_null
+      - name: date_key
+        description: Integer date key in YYYYMMDD format. Foreign key to dim_date.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_key
+      - name: trading_date
+        description: The trading date for this performance record.
+        tests:
+          - not_null
+      - name: close_price
+        description: Closing price for the day.
+        tests:
+          - not_null
+      - name: previous_close_price
+        description: Previous trading day's closing price. Null for the earliest date per ticker.
+      - name: price_change
+        description: Absolute change in closing price vs previous trading day.
+      - name: daily_return_pct
+        description: Percentage return vs previous trading day. Null for earliest date per ticker.
+      - name: moving_average_7d
+        description: 7-day simple moving average of close price.
+      - name: moving_average_20d
+        description: 20-day simple moving average of close price.
+      - name: moving_average_50d
+        description: 50-day simple moving average of close price.
+      - name: volatility_20d
+        description: 20-day rolling standard deviation of daily returns.
+      - name: annualized_volatility_20d
+        description: volatility_20d multiplied by sqrt(252) to annualize.
