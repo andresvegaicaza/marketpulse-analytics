@@ -31,8 +31,8 @@ tickers as (
 
 ),
 
--- Anchor dates for each period relative to the latest available trading date
-period_anchors as (
+-- global date anchors computed once
+anchors as (
 
     select
         max(trading_date)                               as latest_date,
@@ -46,108 +46,84 @@ period_anchors as (
 
 ),
 
--- One row per ticker per period using cross join
-periods as (
+-- 6 period definitions — no per-ticker duplication
+period_defs as (
 
-    select ticker_symbol, 'ALL_AVAILABLE'  as period_name, a.start_all    as period_start, a.latest_date as period_end from performance cross join period_anchors as a group by 1, 2, 3, 4
+    select 'ALL_AVAILABLE'  as period_name, start_all    as period_start, latest_date as period_end from anchors
     union all
-    select ticker_symbol, 'YTD',           a.start_ytd,   a.latest_date from performance cross join period_anchors as a group by 1, 2, 3, 4
+    select 'YTD',           start_ytd,   latest_date from anchors
     union all
-    select ticker_symbol, 'MTD',           a.start_mtd,   a.latest_date from performance cross join period_anchors as a group by 1, 2, 3, 4
+    select 'MTD',           start_mtd,   latest_date from anchors
     union all
-    select ticker_symbol, '30D',           a.start_30d,   a.latest_date from performance cross join period_anchors as a group by 1, 2, 3, 4
+    select '30D',           start_30d,   latest_date from anchors
     union all
-    select ticker_symbol, '90D',           a.start_90d,   a.latest_date from performance cross join period_anchors as a group by 1, 2, 3, 4
+    select '90D',           start_90d,   latest_date from anchors
     union all
-    select ticker_symbol, '1Y',            a.start_1y,    a.latest_date from performance cross join period_anchors as a group by 1, 2, 3, 4
+    select '1Y',            start_1y,    latest_date from anchors
 
 ),
 
--- Aggregate metrics for each ticker-period combination
-aggregated as (
+-- for each ticker × period: aggregate metrics and capture actual boundary dates
+ticker_periods as (
 
     select
-        pe.ticker_symbol,
-        pe.period_name,
-        pe.period_start                                 as period_start_date,
-        pe.period_end                                   as period_end_date,
+        p.ticker_symbol,
+        pd.period_name,
+        pd.period_start                                 as nominal_period_start,
+        pd.period_end                                   as period_end_date,
+        min(p.trading_date)                             as actual_start_date,
+        max(p.trading_date)                             as actual_end_date,
         count(p.trading_date)                           as trading_days_count,
         min(p.close_price)                              as min_close_price,
         max(p.close_price)                              as max_close_price,
         avg(p.daily_return_pct)                         as avg_daily_return_pct,
         avg(p.volatility_20d)                           as volatility_pct,
-        sum(pr.volume)                                  as total_volume,
         avg(pr.volume)                                  as avg_volume
-    from periods as pe
-    inner join performance as p
-        on pe.ticker_symbol = p.ticker_symbol
-        and p.trading_date between pe.period_start and pe.period_end
+    from performance as p
+    cross join period_defs as pd
     inner join prices as pr
         on p.ticker_symbol = pr.ticker_symbol
         and p.trading_date = pr.trading_date
-    group by 1, 2, 3, 4
+    where p.trading_date between pd.period_start and pd.period_end
+    group by
+        p.ticker_symbol,
+        pd.period_name,
+        pd.period_start,
+        pd.period_end
 
 ),
 
--- Get start and end close prices for period return calculation
-period_prices as (
-
-    select
-        pe.ticker_symbol,
-        pe.period_name,
-        first_value(p.close_price) over (
-            partition by pe.ticker_symbol, pe.period_name
-            order by p.trading_date asc
-        )                                               as start_close_price,
-        last_value(p.close_price) over (
-            partition by pe.ticker_symbol, pe.period_name
-            order by p.trading_date asc
-            rows between unbounded preceding and unbounded following
-        )                                               as end_close_price
-    from periods as pe
-    inner join performance as p
-        on pe.ticker_symbol = p.ticker_symbol
-        and p.trading_date between pe.period_start and pe.period_end
-
-),
-
-period_prices_deduped as (
-
-    select distinct
-        ticker_symbol,
-        period_name,
-        start_close_price,
-        end_close_price
-    from period_prices
-
-),
-
+-- fetch actual start and end close prices by joining on boundary dates
 final as (
 
     select
-        a.ticker_symbol,
+        tp.ticker_symbol,
         t.company_name,
         t.category,
-        a.period_name,
-        a.period_start_date,
-        a.period_end_date,
-        pp.start_close_price,
-        pp.end_close_price,
-        {{ safe_divide('pp.end_close_price - pp.start_close_price',
-                       'pp.start_close_price') }}       as period_return_pct,
-        a.avg_daily_return_pct,
-        a.volatility_pct,
-        a.min_close_price,
-        a.max_close_price,
-        a.total_volume,
-        a.avg_volume,
-        a.trading_days_count
-    from aggregated as a
+        tp.period_name,
+        tp.actual_start_date                            as period_start_date,
+        tp.actual_end_date                              as period_end_date,
+        p_start.close_price                             as start_close_price,
+        p_end.close_price                               as end_close_price,
+        {{ safe_divide(
+            'p_end.close_price - p_start.close_price',
+            'p_start.close_price'
+        ) }}                                            as period_return_pct,
+        tp.avg_daily_return_pct,
+        tp.volatility_pct,
+        tp.min_close_price,
+        tp.max_close_price,
+        tp.avg_volume,
+        tp.trading_days_count
+    from ticker_periods as tp
     inner join tickers as t
-        on a.ticker_symbol = t.ticker_symbol
-    inner join period_prices_deduped as pp
-        on a.ticker_symbol = pp.ticker_symbol
-        and a.period_name = pp.period_name
+        on tp.ticker_symbol = t.ticker_symbol
+    inner join performance as p_start
+        on tp.ticker_symbol = p_start.ticker_symbol
+        and tp.actual_start_date = p_start.trading_date
+    inner join performance as p_end
+        on tp.ticker_symbol = p_end.ticker_symbol
+        and tp.actual_end_date = p_end.trading_date
 
 )
 
