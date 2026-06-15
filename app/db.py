@@ -189,7 +189,11 @@ def get_ticker_history(conn, symbol: str, period: str = "ALL_AVAILABLE") -> pd.D
     cursor.execute(sql, (symbol,))
     rows = cursor.fetchall()
     cols = [c[0].lower() for c in cursor.description]
-    return pd.DataFrame(rows, columns=cols)
+    df = pd.DataFrame(rows, columns=cols)
+    for col in cols:
+        if col != "trading_date":
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+    return df
 
 
 def get_performance_summary(conn, symbol: str) -> pd.DataFrame:
